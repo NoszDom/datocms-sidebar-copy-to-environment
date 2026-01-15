@@ -45,7 +45,7 @@ export default function ConfigScreen({ ctx }: Props) {
       <Form>
 
               <Button buttonType="primary" onClick={load}  >
-                Cargar
+                Load
               </Button>
       
       <TextInput
@@ -58,13 +58,13 @@ export default function ConfigScreen({ ctx }: Props) {
       <TextField
               id="modelApiKey"
               name="modelApiKey"
-              label="Model Api Key" 
-              hint="Agregar el modelo"
-              value={modelApiKey || undefined} 
+              label="Model Api Key"
+              hint="Add the model"
+              value={modelApiKey || undefined}
               onChange={ (newValue) => setModelApiKey(newValue.toLowerCase())} />
 
               <Button buttonType="primary" onClick={setting}  >
-                Configurar
+                Configure
               </Button>
           
       </Form>

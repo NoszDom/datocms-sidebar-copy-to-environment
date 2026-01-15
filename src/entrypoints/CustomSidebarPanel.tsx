@@ -35,15 +35,15 @@ import { Dispatch, SetStateAction, useState } from "react";
     const [disable, setDisable] = useState(false);
 
     if (ctx.itemStatus === 'new') {
-      <div>Por favor crear el registro, antes de copiar a otro entorno</div>;
+      <div>Please create the record before copying to another environment</div>;
     }
       
     return (
       <Canvas ctx={ctx}>
 
-          Seleccionar entorno: 
+          Select environment:
           <select id="selectedEnv" name="selectedEnv" value={undefined} onChange={(e) => {setSelectedEnv(e.target.value)}}>
-            <option key={"optionEnv_none"} value="">Seleccione</option>
+            <option key={"optionEnv_none"} value="">Select</option>
             {envs.split(",").map(item => 
               <option key={"optionEnv_" + item} value={item}>{item}</option>
             )}
@@ -51,12 +51,12 @@ import { Dispatch, SetStateAction, useState } from "react";
           <br/>
           <br/>
           <label>
-            <input type="checkbox" id="checkboxAutoKey" value={undefined} checked={checkedAutoKey} onChange={() => setCheckedAutoKey(!checkedAutoKey)} /> Key Autogenerado ?
+            <input type="checkbox" id="checkboxAutoKey" value={undefined} checked={checkedAutoKey} onChange={() => setCheckedAutoKey(!checkedAutoKey)} /> Auto-generated Key?
           </label>
           
           
         <Button key="btnCopyRecordEnv" disabled={disable} onClick={() => copy(ctx, checkedAutoKey, selectedEnv, setDisable)} fullWidth>
-        Copiar
+        Copy
       </Button>
       </Canvas>
     );
@@ -64,7 +64,7 @@ import { Dispatch, SetStateAction, useState } from "react";
 
   function copy( ctx : RenderItemFormSidebarPanelCtx, checkedAutoKey : boolean, selectedEnv: string, setDisable: Dispatch<SetStateAction<boolean>>){
     if(selectedEnv === ""){
-      alert("Seleccionar entorno");
+      alert("Select environment");
       return;
     }
     if(ctx.item?.id){
@@ -73,7 +73,7 @@ import { Dispatch, SetStateAction, useState } from "react";
 
       if(!client || !client2){
         console.error("Token is invalid");
-        ctx.customToast({type: 'warning', message: 'No se pudo copiar el registro'})
+        ctx.customToast({type: 'warning', message: 'Could not copy the record'})
         return;
       }
 
@@ -222,10 +222,10 @@ import { Dispatch, SetStateAction, useState } from "react";
         return result;
     
     }).then(() => {
-      ctx.notice(`Registro copiado a ${selectedEnv} con éxito`);
+      ctx.notice(`Record successfully copied to ${selectedEnv}`);
     }).catch( (e) => {
       console.error(e);
-      ctx.customToast({type: 'warning', message: 'No se pudo copiar el registro'})
+      ctx.customToast({type: 'warning', message: 'Could not copy the record'})
     }).finally(() => setDisable(false))
     }
   }

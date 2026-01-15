@@ -16,7 +16,7 @@ connect({
       return [
         {
           id: CUSTOM_SIDEBAR_ID,
-          label: 'Copiar registro',
+          label: 'Copy record',
           startOpen: true,
         },
       ];
