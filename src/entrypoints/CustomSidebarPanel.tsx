@@ -1,4 +1,8 @@
-import { buildClient, SimpleSchemaTypes } from "@datocms/cma-client-browser";
+import {
+  buildClient,
+  LinkFieldValidators,
+  SimpleSchemaTypes,
+} from "@datocms/cma-client-browser";
 import { RenderItemFormSidebarPanelCtx } from "datocms-plugin-sdk";
 import { Canvas, Button } from "datocms-react-ui";
 import { Dispatch, SetStateAction, useState } from "react";
@@ -7,9 +11,6 @@ type Props = {
   ctx: RenderItemFormSidebarPanelCtx;
 };
 
-interface validator {
-  item_types: string[];
-}
 interface LinkUpload {
   upload_id: string;
 }
@@ -121,13 +122,18 @@ function copy(
           .list(item.item_type.id)
           .then((fields) =>
             fields.filter(
-              (field) => field.validators && field.validators["unique"]
+              (field) =>
+                field.validators && field.validators.hasOwnProperty("unique")
             )
           );
         const result = await Promise.all(
           fields.map(async (field) => {
-            let link = (field.validators?.item_item_type as validator)
-              ?.item_types;
+            let link: string[] = [];
+            if (field.validators?.hasOwnProperty("item_item_type")) {
+              const linkFieldValidators =
+                field.validators as LinkFieldValidators;
+              link = linkFieldValidators.item_item_type?.item_types;
+            }
             let isLink = false;
             let isPrimaryField = false;
             let isFile = false;
@@ -146,7 +152,8 @@ function copy(
                   .then((fields2) =>
                     fields2.filter(
                       (field2) =>
-                        field2.validators && field2.validators["unique"]
+                        field2.validators &&
+                        field2.validators.hasOwnProperty("unique")
                     )
                   );
                 value = null;

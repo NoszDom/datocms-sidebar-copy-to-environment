@@ -6,7 +6,7 @@ import {
 } from "datocms-plugin-sdk";
 import "datocms-react-ui/styles.css";
 import React from "react";
-import ReactDOM from "react-dom";
+import { createRoot } from "react-dom/client";
 import { CustomPanel } from "./entrypoints/CustomSidebarPanel";
 
 const CUSTOM_SIDEBAR_ID = "sidebarRecordCopyEnv";
@@ -22,11 +22,13 @@ connect({
     ];
   },
   renderItemFormSidebarPanel(_, ctx: RenderItemFormSidebarPanelCtx) {
-    ReactDOM.render(
-      <React.StrictMode>
-        <CustomPanel ctx={ctx} />
-      </React.StrictMode>,
-      document.getElementById("root")
-    );
+    const root = document.getElementById("root");
+    if (root) {
+      createRoot(root).render(
+        <React.StrictMode>
+          <CustomPanel ctx={ctx} />
+        </React.StrictMode>
+      );
+    }
   },
 });
