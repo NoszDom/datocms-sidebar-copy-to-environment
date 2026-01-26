@@ -1,7 +1,7 @@
 import { buildClient, SimpleSchemaTypes } from "@datocms/cma-client-browser";
 import { Environment } from "@datocms/cma-client/dist/types/generated/ApiTypes";
 import { RenderItemFormSidebarPanelCtx } from "datocms-plugin-sdk";
-import { Canvas, Button, SelectField } from "datocms-react-ui";
+import { Canvas, Button, SelectField, Form } from "datocms-react-ui";
 import { Dispatch, SetStateAction, useState } from "react";
 
 type Props = {
@@ -54,7 +54,10 @@ export function CustomPanel({ ctx, environments }: Props) {
 
   return (
     <Canvas ctx={ctx}>
-      <div style={{ marginBottom: "var(--spacing-m)" }}>
+      <Form
+        spacing="default"
+        onSubmit={() => copy(ctx, selectedEnv, setDisable)}
+      >
         <SelectField
           id="selectedEnv"
           name="selectedEnv"
@@ -71,15 +74,15 @@ export function CustomPanel({ ctx, environments }: Props) {
             options: envs.map((env) => ({ value: env, label: env })),
           }}
         />
-      </div>
-      <Button
-        key="btnCopyRecordEnv"
-        disabled={disable}
-        onClick={() => copy(ctx, selectedEnv, setDisable)}
-        fullWidth
-      >
-        Copy
-      </Button>
+        <Button
+          key="btnCopyRecordEnv"
+          disabled={disable}
+          onClick={() => copy(ctx, selectedEnv, setDisable)}
+          fullWidth
+        >
+          Copy
+        </Button>
+      </Form>
     </Canvas>
   );
 }
