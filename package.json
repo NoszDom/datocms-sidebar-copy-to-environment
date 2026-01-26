@@ -1,8 +1,8 @@
 {
-  "name": "datocms-plugin-sidebar-record-copy-env",
-  "description": "Allow copy a record to another environment.",
-  "version": "0.1.4",
-  "homepage": "https://github.com/cadiazo/datocms-plugin-sidebar-record-copy-env#readme",
+  "name": "datocms-plugin-sidebar-copy-to-env",
+  "description": "Copy records between environments directly from the sidebar.",
+  "version": "1.0.0",
+  "homepage": "https://github.com/NoszDom/datocms-sidebar-copy-to-env#readme",
   "files": [
     "build",
     "docs"
@@ -10,7 +10,9 @@
   "keywords": [
     "datocms-plugin",
     "sidebar",
-    "record copy environment"
+    "Copy to Env",
+    "copy to environment",
+    "copy record"
   ],
   "dependencies": {
     "@datocms/cma-client-browser": "^5.2.5",
@@ -35,9 +37,7 @@
     "vite": "^7.3.1"
   },
   "datoCmsPlugin": {
-    "title": "Sidebar Record Copy Environment",
-    "previewImage": "docs/preview.png",
-    "coverImage": "docs/cover.png",
+    "title": "Sidebar Copy to Env",
     "entryPoint": "build/index.html",
     "permissions": [
       "currentUserAccessToken"
