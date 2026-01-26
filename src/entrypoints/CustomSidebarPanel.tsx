@@ -9,6 +9,11 @@ type Props = {
   environments: Environment[];
 };
 
+enum ActionType {
+  UPDATE = "update",
+  CREATE = "create",
+}
+
 const FIELDS_TO_EXCLUDE = [
   "id",
   "type",
@@ -34,9 +39,9 @@ function buildApiClient(
 
 export function CustomPanel({ ctx, environments }: Props) {
   const mappedEnvs = environments
+    .filter((env) => env.id !== ctx.environment)
     .sort((a, b) => (a.meta.primary ? -1 : b.meta.primary ? 1 : 0))
-    .map((env) => env.id)
-    .filter((id) => id !== ctx.environment);
+    .map((env) => env.id);
   const [envs] = useState(mappedEnvs);
   const [selectedEnv, setSelectedEnv] = useState("");
   const [disable, setDisable] = useState(true);
@@ -110,60 +115,46 @@ async function copy(
 
     const item = await currentClient.items.find(itemId, { nested: true });
 
-    const onlyValueItems = Object.keys(item)
-      .map((key) => {
-        return { api_key: key, value: item[key] };
-      })
-      .filter((field) => !FIELDS_TO_EXCLUDE.includes(field.api_key));
+    FIELDS_TO_EXCLUDE.forEach((field) => delete (item as any)[field]);
 
-    await copyItemToTargetEnv(
-      ctx,
+    const resultActionType = await copyItemToTargetEnv(
       targetClient,
       itemId,
       itemType,
-      onlyValueItems,
+      item,
     );
 
-    ctx.notice(`Record successfully copied to ${selectedEnv}`);
+    if (resultActionType === ActionType.CREATE) {
+      ctx.notice(
+        `Record did not exist in ${selectedEnv} and was <strong>created successfully</strong>.`,
+      );
+    } else {
+      ctx.notice(
+        `Record exists in ${selectedEnv} and was <strong>updated successfully</strong>.`,
+      );
+    }
   } catch (e) {
     console.error(e);
-    ctx.alert("Could not copy the record");
+    ctx.alert("Could not copy the record!");
   } finally {
     setDisable(false);
   }
 }
 
 async function copyItemToTargetEnv(
-  ctx: RenderItemFormSidebarPanelCtx,
   client: ReturnType<typeof buildClient>,
   itemId: string,
   itemType: string,
-  fields: Array<{ api_key: string; value: any }>,
-) {
+  fields: Record<string, any>,
+): Promise<ActionType> {
   const item_type = await client.itemTypes.find(itemType);
 
-  const createBody: SimpleSchemaTypes.ItemCreateSchema = {
-    item_type: {
-      type: "item_type",
-      id: item_type.id,
-    },
-    ...fields,
-  };
-
-  return await client.items.create(createBody);
-
-  /*  try {
-    return await client.items.update(itemId, { ...fields });
+  try {
+    await client.items.update(itemId, { ...fields });
+    return ActionType.UPDATE;
   } catch (error) {
-    console.error(error);
-
-    ctx.customToast({
-      type: "warning",
-      message:
-        "Record does not exist in target environment, creating a new one.",
-    });
-
     const createBody: SimpleSchemaTypes.ItemCreateSchema = {
+      id: itemId,
       item_type: {
         type: "item_type",
         id: item_type.id,
@@ -171,6 +162,7 @@ async function copyItemToTargetEnv(
       ...fields,
     };
 
-    return await client.items.create(createBody);
-  } */
+    await client.items.create(createBody);
+    return ActionType.CREATE;
+  }
 }
