@@ -1,27 +1,28 @@
-import {
-  buildClient,
-  LinkFieldValidators,
-  SimpleSchemaTypes,
-} from "@datocms/cma-client-browser";
+import { buildClient, SimpleSchemaTypes } from "@datocms/cma-client-browser";
+import { Environment } from "@datocms/cma-client/dist/types/generated/ApiTypes";
 import { RenderItemFormSidebarPanelCtx } from "datocms-plugin-sdk";
-import { Canvas, Button } from "datocms-react-ui";
+import { Canvas, Button, SelectField } from "datocms-react-ui";
 import { Dispatch, SetStateAction, useState } from "react";
 
 type Props = {
   ctx: RenderItemFormSidebarPanelCtx;
+  environments: Environment[];
 };
 
-interface LinkUpload {
-  upload_id: string;
-}
-interface Upload {
-  url: string;
-  filename: string;
-}
+const FIELDS_TO_EXCLUDE = [
+  "id",
+  "type",
+  "updated_at",
+  "created_at",
+  "position",
+  "item_type",
+  "creator",
+  "meta",
+];
 
 function buildApiClient(
   ctx: RenderItemFormSidebarPanelCtx,
-  environment?: string
+  environment?: string,
 ) {
   if (typeof ctx.currentUserAccessToken === "string") {
     return buildClient({
@@ -31,53 +32,47 @@ function buildApiClient(
   }
 }
 
-export function CustomPanel({ ctx }: Props) {
-  const { environments } = ctx.plugin.attributes.parameters;
-  const [envs] = useState(environments as string);
+export function CustomPanel({ ctx, environments }: Props) {
+  const mappedEnvs = environments
+    .sort((a, b) => (a.meta.primary ? -1 : b.meta.primary ? 1 : 0))
+    .map((env) => env.id)
+    .filter((id) => id !== ctx.environment);
+  const [envs] = useState(mappedEnvs);
   const [selectedEnv, setSelectedEnv] = useState("");
-  const [checkedAutoKey, setCheckedAutoKey] = useState(false);
-  const [disable, setDisable] = useState(false);
+  const [disable, setDisable] = useState(true);
 
   if (ctx.itemStatus === "new") {
-    <div>Please create the record before copying to another environment</div>;
+    return (
+      <Canvas ctx={ctx}>
+        Please create the record before copying to another environment
+      </Canvas>
+    );
   }
 
   return (
     <Canvas ctx={ctx}>
-      Select environment:
-      <select
-        id="selectedEnv"
-        name="selectedEnv"
-        value={undefined}
-        onChange={(e) => {
-          setSelectedEnv(e.target.value);
-        }}
-      >
-        <option key={"optionEnv_none"} value="">
-          Select
-        </option>
-        {envs.split(",").map((item) => (
-          <option key={"optionEnv_" + item} value={item}>
-            {item}
-          </option>
-        ))}
-      </select>
-      <br />
-      <br />
-      <label>
-        <input
-          type="checkbox"
-          id="checkboxAutoKey"
-          value={undefined}
-          checked={checkedAutoKey}
-          onChange={() => setCheckedAutoKey(!checkedAutoKey)}
-        />{" "}
-        Auto-generated Key?
-      </label>
+      <div style={{ marginBottom: "var(--spacing-m)" }}>
+        <SelectField
+          id="selectedEnv"
+          name="selectedEnv"
+          label="Select Environment"
+          required={true}
+          value={
+            selectedEnv ? { value: selectedEnv, label: selectedEnv } : null
+          }
+          onChange={(option) => {
+            setSelectedEnv((option as any)?.value || "");
+            setDisable(false);
+          }}
+          selectInputProps={{
+            options: envs.map((env) => ({ value: env, label: env })),
+          }}
+        />
+      </div>
       <Button
         key="btnCopyRecordEnv"
         disabled={disable}
-        onClick={() => copy(ctx, checkedAutoKey, selectedEnv, setDisable)}
+        onClick={() => copy(ctx, selectedEnv, setDisable)}
         fullWidth
       >
         Copy
@@ -86,227 +81,96 @@ export function CustomPanel({ ctx }: Props) {
   );
 }
 
-function copy(
+async function copy(
   ctx: RenderItemFormSidebarPanelCtx,
-  checkedAutoKey: boolean,
   selectedEnv: string,
-  setDisable: Dispatch<SetStateAction<boolean>>
+  setDisable: Dispatch<SetStateAction<boolean>>,
 ) {
-  if (selectedEnv === "") {
-    alert("Select environment");
+  if (!ctx.item?.id) {
     return;
   }
-  if (ctx.item?.id) {
-    const client = buildApiClient(ctx);
-    const client2 = buildApiClient(ctx, selectedEnv);
 
-    if (!client || !client2) {
-      console.error("Token is invalid");
-      ctx.customToast({
-        type: "warning",
-        message: "Could not copy the record",
-      });
-      return;
-    }
+  const currentClient = buildApiClient(ctx);
+  const targetClient = buildApiClient(ctx, selectedEnv);
 
-    setDisable(true);
+  if (!currentClient || !targetClient) {
+    console.error("Token is invalid");
+    ctx.customToast({
+      type: "warning",
+      message: "Could not copy the record",
+    });
+    return;
+  }
 
+  setDisable(true);
+
+  try {
     const itemId = ctx.item.id;
     const itemType = ctx.itemType.attributes.api_key;
 
-    client.fields
-      .list(itemType)
-      .then(async (fields) => {
-        const item = await client.items.find(itemId, {}).then((item) => item);
-        const field_primary = await client.fields
-          .list(item.item_type.id)
-          .then((fields) =>
-            fields.filter(
-              (field) =>
-                field.validators && field.validators.hasOwnProperty("unique")
-            )
-          );
-        const result = await Promise.all(
-          fields.map(async (field) => {
-            let link: string[] = [];
-            if (field.validators?.hasOwnProperty("item_item_type")) {
-              const linkFieldValidators =
-                field.validators as LinkFieldValidators;
-              link = linkFieldValidators.item_item_type?.item_types;
-            }
-            let isLink = false;
-            let isPrimaryField = false;
-            let isFile = false;
-            let value = item[field.api_key];
-            let api_key_link = null;
-            let type_link = null;
-            if (field.field_type === "link") {
-              isLink = true;
-              if (value) {
-                const item_link = await client.items
-                  .find(value as string, {})
-                  .then((item) => item);
-                const item_type_link = await client.itemTypes.find(link[0]);
-                const field_primary_link = await client.fields
-                  .list(link[0])
-                  .then((fields2) =>
-                    fields2.filter(
-                      (field2) =>
-                        field2.validators &&
-                        field2.validators.hasOwnProperty("unique")
-                    )
-                  );
-                value = null;
-                if (field_primary_link && field_primary_link.length > 0) {
-                  type_link = item_type_link.api_key;
-                  api_key_link = field_primary_link[0].api_key;
-                  value = item_link[api_key_link];
-                }
-              }
-            }
+    const item = await currentClient.items.find(itemId, { nested: true });
 
-            if (
-              field_primary &&
-              field_primary.length > 0 &&
-              field.api_key === field_primary[0].api_key
-            ) {
-              isPrimaryField = true;
-            }
-
-            if (field.field_type === "file") {
-              isFile = true;
-              if (value) {
-                let upload_id = (value as LinkUpload).upload_id;
-                const item_upload = await client.uploads.find(upload_id);
-                value = {
-                  url: item_upload.url,
-                  filename: item_upload.filename,
-                };
-              }
-            }
-
-            if (
-              ["gallery", "multiple", "structured_text", "rich_text"].includes(
-                field.field_type
-              )
-            ) {
-              value = null;
-            }
-
-            return {
-              api_key: field.api_key,
-              value: value,
-              isLink: isLink,
-              api_key_link: api_key_link,
-              type_link: type_link,
-              isPrimaryField: isPrimaryField,
-              isFile: isFile,
-            };
-          })
-        );
-        return result;
+    const onlyValueItems = Object.keys(item)
+      .map((key) => {
+        return { api_key: key, value: item[key] };
       })
-      .then(async (fields) => {
-        const result = await Promise.all(
-          fields.map(async (field) => {
-            let value = field.value;
-            if (checkedAutoKey && field.isPrimaryField && !field.isLink) {
-              value = `${value} (copy ${new Date().getTime()})`;
-            }
-            if (field.isLink && field.type_link && field.api_key_link) {
-              const map = new Map<string, {}>();
-              map.set(field.api_key_link, { eq: field.value });
+      .filter((field) => !FIELDS_TO_EXCLUDE.includes(field.api_key));
 
-              value = await client2.items
-                .list({
-                  filter: {
-                    type: field.type_link,
-                    fields: {
-                      ...Object.fromEntries(map),
-                    },
-                  },
-                  version: "current",
-                })
-                .then((items) => {
-                  if (items && items.length > 0) {
-                    return items[0].id;
-                  }
-                  return null;
-                });
-            }
+    await copyItemToTargetEnv(
+      ctx,
+      targetClient,
+      itemId,
+      itemType,
+      onlyValueItems,
+    );
 
-            if (field.isFile && value) {
-              let upload_id = await client2.uploads
-                .list({
-                  filter: {
-                    fields: {
-                      filename: {
-                        matches: {
-                          pattern: (value as Upload).filename,
-                          caseSensitive: false,
-                        },
-                      },
-                    },
-                  },
-                })
-                .then((items) => {
-                  if (items && items.length > 0) {
-                    return items[0].id;
-                  }
-                  return null;
-                });
-
-              if (!upload_id) {
-                let blob = await fetch((value as Upload).url).then((resource) =>
-                  resource.blob()
-                );
-                let fileName = (value as Upload).filename;
-                upload_id = await client2.uploads
-                  .createFromFileOrBlob({
-                    fileOrBlob: new File([blob], fileName),
-                    filename: fileName,
-                  })
-                  .then((result) => result.id);
-              }
-              value = {
-                upload_id: upload_id,
-              };
-            }
-
-            return { api_key: field.api_key, value: value };
-          })
-        );
-        return result;
-      })
-      .then(async (fields) => {
-        const map = new Map(
-          fields.map((field) => {
-            return [field.api_key, field.value];
-          })
-        );
-
-        const item_type = await client2.itemTypes.find(itemType);
-        const body: SimpleSchemaTypes.ItemCreateSchema = {
-          item_type: {
-            type: "item_type",
-            id: item_type.id,
-          },
-          ...Object.fromEntries(map),
-        };
-        const result = await client2.items.create(body);
-
-        return result;
-      })
-      .then(() => {
-        ctx.notice(`Record successfully copied to ${selectedEnv}`);
-      })
-      .catch((e) => {
-        console.error(e);
-        ctx.customToast({
-          type: "warning",
-          message: "Could not copy the record",
-        });
-      })
-      .finally(() => setDisable(false));
+    ctx.notice(`Record successfully copied to ${selectedEnv}`);
+  } catch (e) {
+    console.error(e);
+    ctx.alert("Could not copy the record");
+  } finally {
+    setDisable(false);
   }
+}
+
+async function copyItemToTargetEnv(
+  ctx: RenderItemFormSidebarPanelCtx,
+  client: ReturnType<typeof buildClient>,
+  itemId: string,
+  itemType: string,
+  fields: Array<{ api_key: string; value: any }>,
+) {
+  const item_type = await client.itemTypes.find(itemType);
+
+  const createBody: SimpleSchemaTypes.ItemCreateSchema = {
+    item_type: {
+      type: "item_type",
+      id: item_type.id,
+    },
+    ...fields,
+  };
+
+  return await client.items.create(createBody);
+
+  /*  try {
+    return await client.items.update(itemId, { ...fields });
+  } catch (error) {
+    console.error(error);
+
+    ctx.customToast({
+      type: "warning",
+      message:
+        "Record does not exist in target environment, creating a new one.",
+    });
+
+    const createBody: SimpleSchemaTypes.ItemCreateSchema = {
+      item_type: {
+        type: "item_type",
+        id: item_type.id,
+      },
+      ...fields,
+    };
+
+    return await client.items.create(createBody);
+  } */
 }
