@@ -39,6 +39,7 @@
   "datoCmsPlugin": {
     "title": "Sidebar Copy to Environment",
     "entryPoint": "build/index.html",
+    "coverImage": "assets/cover.png",
     "permissions": [
       "currentUserAccessToken"
     ]
