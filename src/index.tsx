@@ -18,8 +18,12 @@ connect({
   itemFormSidebarPanels(_itemType: ItemType, ctx: ItemFormSidebarPanelsCtx) {
     const whitelistedRoles = ctx.plugin.attributes.parameters
       .whitelistedRoles as string[] | undefined;
+    const whiteListWithAccountRole = [
+      ...(whitelistedRoles ?? []),
+      "account_role",
+    ];
 
-    if (whitelistedRoles?.includes(ctx.currentRole.id)) {
+    if (whiteListWithAccountRole?.includes(ctx.currentRole.id)) {
       return [
         {
           id: CUSTOM_SIDEBAR_ID,
