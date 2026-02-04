@@ -1,7 +1,8 @@
 import { buildClient, SimpleSchemaTypes } from "@datocms/cma-client-browser";
+import { OnUploadProgressInfo } from "@datocms/cma-client-browser/dist/types/resources/Upload";
 import { Environment } from "@datocms/cma-client/dist/types/generated/ApiTypes";
 import { RenderItemFormSidebarPanelCtx } from "datocms-plugin-sdk";
-import { Canvas, Button, SelectField, Form } from "datocms-react-ui";
+import { Canvas, Button, SelectField, Form, Spinner } from "datocms-react-ui";
 import { Dispatch, SetStateAction, useState } from "react";
 
 type Props = {
@@ -43,6 +44,7 @@ export function CustomPanel({ ctx, environments }: Props) {
   const [envs] = useState(mappedEnvs);
   const [selectedEnv, setSelectedEnv] = useState("");
   const [disable, setDisable] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   if (ctx.itemStatus === "new") {
     return (
@@ -56,7 +58,7 @@ export function CustomPanel({ ctx, environments }: Props) {
     <Canvas ctx={ctx}>
       <Form
         spacing="default"
-        onSubmit={() => copy(ctx, selectedEnv, setDisable)}
+        onSubmit={() => copy(ctx, selectedEnv, setDisable, setLoading)}
       >
         <SelectField
           id="selectedEnv"
@@ -77,10 +79,16 @@ export function CustomPanel({ ctx, environments }: Props) {
         <Button
           key="btnCopyRecordEnv"
           disabled={disable}
-          onClick={() => copy(ctx, selectedEnv, setDisable)}
+          onClick={() => copy(ctx, selectedEnv, setDisable, setLoading)}
           fullWidth
         >
-          Copy
+          {loading ? (
+            <>
+              <Spinner></Spinner> Copying...
+            </>
+          ) : (
+            "Copy"
+          )}
         </Button>
       </Form>
     </Canvas>
@@ -91,6 +99,7 @@ async function copy(
   ctx: RenderItemFormSidebarPanelCtx,
   selectedEnv: string,
   setDisable: Dispatch<SetStateAction<boolean>>,
+  setLoading: Dispatch<SetStateAction<boolean>>,
 ) {
   if (!ctx.item?.id) {
     return;
@@ -109,6 +118,7 @@ async function copy(
   }
 
   setDisable(true);
+  setLoading(true);
 
   try {
     const itemId = ctx.item.id;
@@ -116,11 +126,10 @@ async function copy(
 
     const item = await currentClient.items.find(itemId, { nested: true });
 
-    console.log("before cleaning", structuredClone(item));
-
     cleanItem(item, FIELDS_TO_EXCLUDE);
 
-    console.log("after cleaning", structuredClone(item));
+    await handleUploads(item, currentClient, targetClient);
+
     const resultActionType = await copyItemToTargetEnv(
       targetClient,
       itemId,
@@ -142,6 +151,7 @@ async function copy(
     ctx.alert("Could not copy the record!");
   } finally {
     setDisable(false);
+    setLoading(false);
   }
 }
 
@@ -164,6 +174,85 @@ function cleanItem(item: any, fieldsToExclude: string[]): void {
       }
     }
   });
+}
+
+async function handleUploads(
+  fields: Record<string, any>,
+  currentClient: ReturnType<typeof buildClient>,
+  targetClient: ReturnType<typeof buildClient>,
+): Promise<void> {
+  for (const [_, value] of Object.entries(fields)) {
+    await processUploadValue(value, currentClient, targetClient);
+  }
+}
+
+async function processUploadValue(
+  value: any,
+  currentClient: ReturnType<typeof buildClient>,
+  targetClient: ReturnType<typeof buildClient>,
+): Promise<void> {
+  if (!value || typeof value !== "object") {
+    return;
+  }
+
+  // Check if this object has an upload_id (it's an upload object)
+  if (value.upload_id) {
+    await handleUpload(value, currentClient, targetClient);
+    return;
+  }
+
+  // Recursively process arrays
+  if (Array.isArray(value)) {
+    for (const element of value) {
+      await processUploadValue(element, currentClient, targetClient);
+    }
+    return;
+  }
+
+  // Recursively process nested objects
+  for (const nestedValue of Object.values(value)) {
+    await processUploadValue(nestedValue, currentClient, targetClient);
+  }
+}
+
+async function handleUpload(
+  upload: any,
+  currentClient: ReturnType<typeof buildClient>,
+  targetClient: ReturnType<typeof buildClient>,
+): Promise<void> {
+  const uploadId = upload.upload_id as string;
+
+  try {
+    await targetClient.uploads.find(uploadId);
+    return;
+  } catch {
+    const currentEnvUpload = await currentClient.uploads.find(uploadId);
+    const blob = await fetch(currentEnvUpload.url).then((res) => res.blob());
+
+    const uploadProgress = new Promise<void>(async (resolve) => {
+      targetClient.uploads.createFromFileOrBlob({
+        ...currentEnvUpload,
+        fileOrBlob: blob,
+        onProgress: (info: OnUploadProgressInfo) => {
+          // If upload is ready and asset is getting created
+          if (info.type === "CREATING_UPLOAD_OBJECT") {
+            // Poll to check if asset is available
+            const pollInterval = setInterval(async () => {
+              try {
+                await targetClient.uploads.find(uploadId);
+                clearInterval(pollInterval);
+                resolve();
+              } catch {
+                // Continue polling
+              }
+            }, 500);
+          }
+        },
+      });
+    });
+
+    await uploadProgress;
+  }
 }
 
 async function copyItemToTargetEnv(
